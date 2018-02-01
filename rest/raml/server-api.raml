@@ -1,0 +1,20 @@
+#%RAML 1.0
+title: Test API
+version: v3
+baseUri: https://api.github.com
+annotationTypes:
+  exitCode: integer
+  command-pattern: string
+/echo1/{message}:
+  uriParameters:
+    message:
+      type: string
+      required: true
+  get:
+    (command-pattern): echo {{.message}}
+    responses:
+      200:
+        (exitCode): 0
+        body:
+          text/plain:
+            type: string

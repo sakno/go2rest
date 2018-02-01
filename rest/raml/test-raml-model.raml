@@ -1,0 +1,55 @@
+#%RAML 1.0
+title: Test API
+version: v3
+baseUri: https://api.github.com
+annotationTypes:
+  exitCode: integer
+  command-pattern: string
+/freemem/{format}:
+  uriParameters:
+    format:
+      type: string
+      required: true
+    flag:
+      type: boolean
+      required: false
+      default: true
+    int:
+      type: integer
+      default: 100
+      minimum: 1
+      maximum: 200
+    num:
+      type: number
+      required: false
+      minimum: 2.0
+      maximum: 42.0
+    array1:
+      type: boolean[]
+    array2:
+      type: array
+      items: string
+    array3:
+      type: array
+      items:
+        type: integer
+  get:
+    (command-pattern): free {format}
+    headers:
+      X-Dept:
+        type: integer
+        required: false
+    body:
+      application/octet-stream:
+        type: file
+    responses:
+      200:
+        (exitCode): 0
+        body:
+          application/json:
+            type: number
+      404:
+        (exitCode): -1
+        body:
+          text/plain:
+            type: string
