@@ -18,6 +18,11 @@
 1. Describe REST API in the form of RAML file with `.raml` extension
 1. Run `go2rest <path/to/file.raml> --port <port>`. Now REST service is hosted on specified port 
 
-# Room for improvement
+# Room for improvements
 Internal representation of REST model does not rely on RAML directly. It is possible to implement any descriptive model of API. For example, [OpenAPI Spec](https://www.openapis.org/) used by [Swagger](https://swagger.io/) toolchain.
-JSON Object (dictionary) data type is not supported at this moment but can be implemented easily
+
+JSON Object (dictionary) data type is not supported at this moment but can be implemented easily.
+
+Some of RAML features are not supported:
+1. Multipart form data
+1. Includes, Libraries, Overlays, and Extensions
