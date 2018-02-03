@@ -24,6 +24,45 @@ If you want to run service in FastCGI mode then omit port number like this: `go2
 RAML file should have `.raml` extension. **go2rest** uses file extension to determine correct model parser because, in future, the program may support 
 another model formats such as OpenAPI.
 
+Save the following example into file `example.raml`:
+```yaml
+#%RAML 1.0
+title: New Microservice
+version: v1
+baseUri: http://localhost
+annotationTypes:
+  exitCode: integer
+  command-pattern: string
+/memory:
+  get:
+    queryParameters:
+      uom:
+        type: string
+        required: false
+        default: m
+        description: | 
+          Unit of measurement. Possible values: m (megabytes), k (kilobytes), g (gigabytes)
+    (command-pattern): free -{{.uom}}
+    responses:
+      200:
+        description: OK
+        (exitCode): 0
+        body:
+          text/plain:
+            type: string
+      400:
+        description: Bad request
+        (exitCode): 1
+        body:
+          text/plain:
+            type: string
+```
+Then run `go2rest -port 3535 ./example.raml`. 
+
+After that you can get memory status with `wget -qO- http://localhost:3535/memory`.
+
+For more detailed guide look at [Wiki](https://github.com/sakno/go2rest/wiki).
+
 # Room for improvements
 Internal representation of REST model does not rely on RAML directly. It is possible to implement any descriptive model of API. For example, [OpenAPI Spec](https://www.openapis.org/) used by [Swagger](https://swagger.io/) toolchain.
 

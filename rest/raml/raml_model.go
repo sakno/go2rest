@@ -20,6 +20,7 @@ import (
 	"github.com/sakno/go2rest/rest"
 	"net/http"
 	"encoding/base64"
+	"net/url"
 )
 
 const (
@@ -44,6 +45,8 @@ const (
 	fMaxItems  = "maxItems"
 	fItems     = "items"
 	fHeaders   = "headers"
+	fBaseUri = "baseUri"
+	fTitle = "title"
 	fQueryParameters = "queryParameters"
 	fBody 	   = "body"
 	fResponses = "responses"
@@ -961,6 +964,7 @@ func (self *Endpoint) GetMethodDescriptor(method string) rest.HttpMethodDescript
 //Represents REST model restored from RAML markup
 type Model struct {
 	title string
+	baseUri *url.URL
 	endpoints map[string]rest.Endpoint
 }
 
@@ -983,8 +987,14 @@ func (self *Model) parse(model yaml.MapSlice) {
 	for _, item := range model {
 		if field, ok := item.Key.(string); ok {
 			switch field {
-			case "title":
+			case fTitle:
 				self.title = item.Value.(string)
+			case fBaseUri:
+				if baseUri, err := url.Parse(item.Value.(string)); err == nil {
+					self.baseUri = baseUri
+				} else {
+					log.Printf("Failed to parse base URI: %s", err.Error())
+				}
 			default:
 				if strings.Index(field, "/") == 0 { //endpoint detected
 					log.Printf("Start parsing endpoint %s", field)
@@ -1018,4 +1028,8 @@ func (self *Model) ReadModelFromFile(fileName string) error {
 	} else {
 		return err
 	}
+}
+
+func (self *Model) BaseUrl() *url.URL {
+	return self.baseUri
 }
