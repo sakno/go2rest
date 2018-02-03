@@ -7,6 +7,7 @@
 * Supports for file transfer through REST API that can be used as input argument for command-line program
 * Mapping between process exit statuses and HTTP statuses
 * Supported JSON types: number, string, boolean, array
+* FastCGI support
 
 # How to build
 1. Install [Go](https://golang.org/dl/) compiler according to your Operating System
@@ -16,7 +17,12 @@
 
 # How to use
 1. Describe REST API in the form of RAML file with `.raml` extension
-1. Run `go2rest <path/to/file.raml> --port <port>`. Now REST service is hosted on specified port 
+1. Run `go2rest [--port <port>] <path/to/file.raml>`. Now REST service is hosted on specified port
+
+If you want to run service in FastCGI mode then omit port number like this: `go2rest <path/to/file.raml>`
+
+RAML file should have `.raml` extension. **go2rest** uses file extension to determine correct model parser because, in future, the program may support 
+another model formats such as OpenAPI.
 
 # Room for improvements
 Internal representation of REST model does not rely on RAML directly. It is possible to implement any descriptive model of API. For example, [OpenAPI Spec](https://www.openapis.org/) used by [Swagger](https://swagger.io/) toolchain.

@@ -16,8 +16,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"../../cmdexec"
-	"../../rest"
+	"github.com/sakno/go2rest/cmdexec"
+	"github.com/sakno/go2rest/rest"
 	"net/http"
 	"encoding/base64"
 )
@@ -44,6 +44,7 @@ const (
 	fMaxItems  = "maxItems"
 	fItems     = "items"
 	fHeaders   = "headers"
+	fQueryParameters = "queryParameters"
 	fBody 	   = "body"
 	fResponses = "responses"
 	fExitCode  = "(exitCode)"
@@ -740,6 +741,11 @@ func (self *MethodDescriptor) parse(description interface{}) {
 		self.reqHeaders = make(rest.ParameterList)
 		if reqHeaders, ok := tree[fHeaders]; ok {
 			parseParameterList(reqHeaders, self.reqHeaders)
+		}
+		//parse query parameters
+		self.queryParameters = make(rest.ParameterList)
+		if queryParameters, ok := tree[fQueryParameters]; ok {
+			parseParameterList(queryParameters, self.queryParameters)
 		}
 		//parse body
 		self.request = make(rest.ParameterList)

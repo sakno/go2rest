@@ -2,7 +2,7 @@ package raml
 
 import (
 	"testing"
-	"../../rest"
+	"github.com/sakno/go2rest/rest"
 	"net/http"
 	"io/ioutil"
 	_ "time"

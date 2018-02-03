@@ -6,7 +6,7 @@ import (
 	"context"
 	"github.com/gorilla/mux"
 	"log"
-	"../cmdexec"
+	"github.com/sakno/go2rest/cmdexec"
 	"fmt"
 	"strings"
 	"mime"
