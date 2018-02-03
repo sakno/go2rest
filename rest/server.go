@@ -22,7 +22,7 @@ const (
 )
 var wellKnownMethods = []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodHead, http.MethodPatch}
 
-type Server struct {
+type StandaloneServer struct {
 	http.Server
 	CertFile, KeyFile string
 	Model Model
@@ -228,7 +228,7 @@ func prepareRouter(router *mux.Router, model Model) {
 	}
 }
 
-func (self *Server) run() error {
+func (self *StandaloneServer) run() error {
 	//start HTTP server
 	if self.CertFile != "" && self.KeyFile != "" {
 		return self.ListenAndServeTLS(self.CertFile, self.KeyFile)
@@ -237,7 +237,7 @@ func (self *Server) run() error {
 	}
 }
 
-func (self *Server) Run(async bool) error {
+func (self *StandaloneServer) Run(async bool) error {
 	//setup model
 	if self.Model == nil {
 		return errors.New("REST model is not defined")
@@ -254,6 +254,6 @@ func (self *Server) Run(async bool) error {
 	}
 }
 
-func (self *Server) Close() error {
+func (self *StandaloneServer) Close() error {
 	return self.Shutdown(context.Background())
 }

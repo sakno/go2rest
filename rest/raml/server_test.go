@@ -18,7 +18,7 @@ func TestServer(test *testing.T) {
 	if err := model.ReadModelFromFile("server-api.raml"); err != nil {
 		test.Fatal(err)
 	}
-	server := rest.Server{Model: model}
+	server := rest.StandaloneServer{Model: model}
 	server.Addr = ":9535"
 	server.Run(true)
 	defer server.Close()
