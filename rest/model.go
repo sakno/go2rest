@@ -2,7 +2,7 @@ package rest
 
 import (
 	"io"
-	"../cmdexec"
+	"github.com/sakno/go2rest/cmdexec"
 	"strings"
 	"net/url"
 )

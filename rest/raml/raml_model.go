@@ -16,10 +16,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
-	"../../cmdexec"
-	"../../rest"
+	"github.com/sakno/go2rest/cmdexec"
+	"github.com/sakno/go2rest/rest"
 	"net/http"
-	"encoding/base64"
+	"net/url"
 )
 
 const (
@@ -44,6 +44,9 @@ const (
 	fMaxItems  = "maxItems"
 	fItems     = "items"
 	fHeaders   = "headers"
+	fBaseUri = "baseUri"
+	fTitle = "title"
+	fQueryParameters = "queryParameters"
 	fBody 	   = "body"
 	fResponses = "responses"
 	fExitCode  = "(exitCode)"
@@ -122,7 +125,7 @@ func (self *AnyParameter) ReadValue(value io.Reader, format rest.ParameterValueF
 		err := json.NewDecoder(value).Decode(&result)
 		return result, err
 	default:
-		return nil, errors.New("Unsupported value format")
+		return nil, errors.New("unsupported value format")
 	}
 }
 
@@ -147,25 +150,9 @@ type FileParameter struct {
 
 func (self *FileParameter) ReadValue(value io.Reader, format rest.ParameterValueFormat) (interface{}, error) {
 	if file, err := cmdexec.NewTempFile(); err == nil {
-		switch format {
-		case rest.FormatJSON://JSON string with base64 content
-			content := new(string)
-			if err := json.NewDecoder(value).Decode(content); err == nil {
-				content := base64.NewDecoder(base64.StdEncoding, bytes.NewBufferString(*content))
-				io.Copy(file, content)
-			} else {
-				return nil, err
-			}
-		case rest.FormatText://plain base64 content
-			content := base64.NewDecoder(base64.StdEncoding, value)
-			io.Copy(file, content)
-		case rest.FormatBinary:	//raw bytes
-			io.Copy(file, value)
-		default:
-			return nil, errors.New("unsupported format")
-		}
-		//return file content with correct position in the reader
-		if _, err := file.Seek(0, io.SeekStart); err == nil {
+		if _, err := io.Copy(file, value); err != nil {
+			return nil, err
+		} else if _, err := file.Seek(0, io.SeekStart); err == nil {//return file content with correct position in the reader
 			return file, nil
 		} else {
 			return nil, err
@@ -741,6 +728,11 @@ func (self *MethodDescriptor) parse(description interface{}) {
 		if reqHeaders, ok := tree[fHeaders]; ok {
 			parseParameterList(reqHeaders, self.reqHeaders)
 		}
+		//parse query parameters
+		self.queryParameters = make(rest.ParameterList)
+		if queryParameters, ok := tree[fQueryParameters]; ok {
+			parseParameterList(queryParameters, self.queryParameters)
+		}
 		//parse body
 		self.request = make(rest.ParameterList)
 		if request, ok := tree[fBody]; ok {
@@ -955,6 +947,7 @@ func (self *Endpoint) GetMethodDescriptor(method string) rest.HttpMethodDescript
 //Represents REST model restored from RAML markup
 type Model struct {
 	title string
+	baseUri *url.URL
 	endpoints map[string]rest.Endpoint
 }
 
@@ -977,8 +970,14 @@ func (self *Model) parse(model yaml.MapSlice) {
 	for _, item := range model {
 		if field, ok := item.Key.(string); ok {
 			switch field {
-			case "title":
+			case fTitle:
 				self.title = item.Value.(string)
+			case fBaseUri:
+				if baseUri, err := url.Parse(item.Value.(string)); err == nil {
+					self.baseUri = baseUri
+				} else {
+					log.Printf("Failed to parse base URI: %s", err.Error())
+				}
 			default:
 				if strings.Index(field, "/") == 0 { //endpoint detected
 					log.Printf("Start parsing endpoint %s", field)
@@ -1012,4 +1011,8 @@ func (self *Model) ReadModelFromFile(fileName string) error {
 	} else {
 		return err
 	}
+}
+
+func (self *Model) BaseUrl() *url.URL {
+	return self.baseUri
 }

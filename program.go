@@ -5,9 +5,10 @@ import (
 	"os"
 	"log"
 	"path"
-	"../rest"
-	"../rest/raml"
+	"github.com/sakno/go2rest/rest"
+	"github.com/sakno/go2rest/rest/raml"
 	"github.com/sakno/go2rest/hosting"
+	"fmt"
 )
 
 func startRestService(model rest.Model, address, certFile, keyFile string) {
@@ -19,13 +20,15 @@ func startRestService(model rest.Model, address, certFile, keyFile string) {
 		log.Printf("Starting FastCGI process")
 	} else {
 		rest := new(rest.StandaloneServer)
-		rest.Addr = address
+		rest.Addr = ":" + address
 		rest.KeyFile = keyFile
 		rest.CertFile = certFile
+		rest.Model = model
 		server = rest
 		log.Printf("Starting standalone server at %s", address)
 	}
-	server.Run(false)
+	err := server.Run(false)
+	log.Printf("Unable to run server. Reason: %s", err.Error())
 }
 
 func run(fileName, address, certFile, keyFile string) {
@@ -44,10 +47,16 @@ func run(fileName, address, certFile, keyFile string) {
 
 func main() {
 	flags := flag.NewFlagSet("rest2go", flag.ExitOnError)
-	var address, certFile, keyFile string
-	flags.StringVar(&address, "address", ":http", "TCP address to listen on")
-	flags.StringVar(&certFile, "certFile", "", "Absolute path to certificate file")
-	flags.StringVar(&keyFile, "keyFile", "", "Absolute path to key file")
-	flags.Parse(os.Args[1:])
-	run(flag.Arg(0), address, certFile, keyFile)
+	flags.SetOutput(os.Stdout)
+	var port, certFile, keyFile string
+	flags.StringVar(&port, "port", "http", "TCP port to listen on")
+	flags.StringVar(&certFile, "cert", "", "Absolute path to certificate file")
+	flags.StringVar(&keyFile, "key", "", "Absolute path to key file")
+	if len(os.Args) == 1 {
+		fmt.Fprintln(os.Stdout, "go2rest [-port port-number] [-cert path/to/x509/cert] [-key path/to/cert/key] <path/to/model>")
+		flags.PrintDefaults()
+	} else {
+		flags.Parse(os.Args[1:])
+		run(flags.Arg(0), port, certFile, keyFile)
+	}
 }

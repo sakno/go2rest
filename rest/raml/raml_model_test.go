@@ -5,7 +5,7 @@ import (
 	"strings"
 	"math"
 	"reflect"
-	"../../rest"
+	"github.com/sakno/go2rest/rest"
 	"net/http"
 )
 
