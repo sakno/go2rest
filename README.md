@@ -18,6 +18,7 @@
 # How to use
 1. Describe REST API in the form of RAML file with `.raml` extension. Read [Wiki](https://github.com/sakno/go2rest/wiki) for detailed guide of how to write correct RAML file
 1. Run `go2rest [--port <port>] <path/to/file.raml>`. Now REST service is hosted on specified port
+1. Generate documentation for your service using [raml2html](https://github.com/raml2html/raml2html) tool: `raml2html path/to/file.raml > service-doc.html`
 
 If you want to run service in FastCGI mode then omit port number like this: `go2rest <path/to/file.raml>`
 
