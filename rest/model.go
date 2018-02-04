@@ -149,7 +149,5 @@ type Endpoint interface {
 type Model interface {
 	Endpoints() map[string]Endpoint	//set of endpoints declared in the model
 	Name() string	//name of model
-	//address of service, may be nil if model doesn't support definition of preferred address
-	BaseUrl() *url.URL
 }
 

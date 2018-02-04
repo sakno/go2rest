@@ -14,6 +14,7 @@ import (
 	"os"
 	"net/textproto"
 	"strconv"
+	"github.com/sakno/go2rest/core"
 )
 const (
 	headerContentType = "Content-Type"
@@ -21,6 +22,28 @@ const (
 	TemplateParamBody = "body"
 )
 var wellKnownMethods = []string{http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodHead, http.MethodPatch}
+
+//context of service request
+type requestContext struct {
+	*http.Request
+	args cmdexec.Arguments
+	deferredActions []core.DeferredAction
+}
+
+func (self *requestContext) finalize() {
+	for _, action := range self.deferredActions {
+		action()
+	}
+}
+
+func (self *requestContext) Defer(action core.DeferredAction) {
+	self.deferredActions = append(self.deferredActions, action)
+}
+
+func (self *requestContext) deferClose(closer io.Closer) {
+	cl := closer.Close
+	self.Defer(func() { cl() })
+}
 
 type StandaloneServer struct {
 	http.Server
@@ -50,23 +73,26 @@ func setDefaultValue(name string, input Parameter, output cmdexec.Arguments) boo
 	}
 }
 
-type parametersExtractor func(*http.Request) map[string]string
+type parametersExtractor func(r *http.Request) map[string]string
 
-func (self ParameterList) parseArguments(input *http.Request, output cmdexec.Arguments, varResolver parametersExtractor) error {
-	vars := varResolver(input)
-	for name, parameter := range self {
-		if value, exists := vars[name]; exists { //parameter exists in the request
+func (self *requestContext) parseArguments(parameters ParameterList, varResolver parametersExtractor) error {
+	vars := varResolver(self.Request)
+	for name, parameter := range parameters {
+		//check parameter type
+		if _, ok := parameter.(FileParameter); ok {
+			return errors.New(fmt.Sprintf("parameter %s can't have FILE type", name))
+		} else if value, exists := vars[name]; exists { //parameter exists in the request
 			if value, err := parameter.ReadValue(strings.NewReader(value), FormatText); err == nil {
 				if parameter.Validate(value) {
-					output[name] = value
+					self.args[name] = value
 				} else {
-					return &textproto.Error{Msg: fmt.Sprintf("Argument %s has invalid value %v", name, value), Code:http.StatusBadRequest}
+					return &textproto.Error{Msg: fmt.Sprintf("Argument %s has invalid value %v", name, value), Code: http.StatusBadRequest}
 				}
 			} else {
 				return err
 			}
 		} else if parameter.HasDefaultValue() { //parameter doesn't exist and not required
-			setDefaultValue(name, parameter, output)
+			setDefaultValue(name, parameter, self.args)
 		} else if parameter.Required() {
 			return &textproto.Error{
 				Msg:  fmt.Sprintf("Parameter %s is required but not specified in actual request", name),
@@ -89,18 +115,20 @@ func extractHeaders(request *http.Request) map[string]string {
 	return result
 }
 
-func (self ParameterList) parseRequestBody(requestType string, request io.ReadCloser, output cmdexec.Arguments) error {
-	defer request.Close()
-	if body, exists := self[requestType]; exists { //body for this MIME type is specified
-		if body, err := body.ReadValue(request, GetFormatByMIME(requestType)); err == nil {
+func (self *requestContext) parseRequestBody(bodyDefinition ParameterList, requestType string) error {
+	defer self.Body.Close()
+	if body, exists := bodyDefinition[requestType]; exists { //body for this MIME type is specified
+		if body, err := body.ReadValue(self.Body, GetFormatByMIME(requestType)); err == nil {
 			switch body := body.(type) {
 			case os.File:
 				//for file we need to return file name only.
 				defer body.Close()
-				output[TemplateParamBody] = body.Name()
+				fileName := body.Name()
+				self.args[TemplateParamBody] = fileName
+				self.Defer(func() { os.Remove(fileName) })	//ensure that temporary file with request body will be deleted
 				return nil
 			default:
-				output[TemplateParamBody] = body
+				self.args[TemplateParamBody] = body
 				return nil
 			}
 		} else if err == io.EOF { //no body is present
@@ -108,7 +136,7 @@ func (self ParameterList) parseRequestBody(requestType string, request io.ReadCl
 		} else { //failed to read body
 			return err
 		}
-	} else if len(self) == 0 { //model has no definition of the body. It's ok and just return without any error
+	} else if len(bodyDefinition) == 0 { //model has no definition of the body. It's ok and just return without any error
 		return nil
 	} else { //media type is not configured in model
 		return &textproto.Error{Msg: fmt.Sprintf("Unsupported media type: %s", requestType), Code: http.StatusUnsupportedMediaType}
@@ -125,21 +153,20 @@ func convertToHttpError(err error, response http.ResponseWriter) {
 }
 
 //handles HTTP request according with model specification
-func parseRequest(descriptor HttpMethodDescriptor, request *http.Request, response http.ResponseWriter, executionArgs cmdexec.Arguments) bool {
+func (self *requestContext) parseRequest(descriptor HttpMethodDescriptor, response http.ResponseWriter) bool {
 	//check media type and define default media type if necessary
-	contentType := request.Header.Get(headerContentType)
+	contentType := self.Header.Get(headerContentType)
 	if len(contentType) == 0 {
 		contentType = "text/plain"
 	}
 	if contentType, _, err := mime.ParseMediaType(contentType); err == nil {
-		//parse query parameters
-		if err := descriptor.QueryParameters().parseArguments(request, executionArgs, extractQueryParameters); err != nil {
+		if err := self.parseArguments(descriptor.QueryParameters(), extractQueryParameters); err != nil {//parse query parameters
 			convertToHttpError(err, response)
 			return false
-		} else if err := descriptor.RequestHeaders().parseArguments(request, executionArgs, extractHeaders); err != nil {
+		} else if err := self.parseArguments(descriptor.RequestHeaders(), extractHeaders); err != nil {//parse headers
 			convertToHttpError(err, response)
 			return false
-		} else if err := descriptor.Request().parseRequestBody(contentType, request.Body, executionArgs); err != nil {
+		} else if err := self.parseRequestBody(descriptor.Request(), contentType); err != nil {//parse request body
 			convertToHttpError(err, response)
 			return false
 		}
@@ -150,61 +177,71 @@ func parseRequest(descriptor HttpMethodDescriptor, request *http.Request, respon
 	return true
 }
 
+func (self *requestContext) handleRequest(endpoint Endpoint, response http.ResponseWriter) {
+	//parse path arguments
+	if err := self.parseArguments(endpoint.PathParameters(), mux.Vars); err != nil {
+		http.Error(response, fmt.Sprintf("Incorrect path arguments. Error: %s", err.Error()), http.StatusBadRequest)
+	}
+	method := endpoint.GetMethodDescriptor(self.Method)
+	if method == nil {
+		http.Error(response, fmt.Sprintf("Method %s is not supported", self.Method), http.StatusMethodNotAllowed)
+	} else if self.parseRequest(method, response) {//prepare execution arguments
+		//execute command-line tool
+		if successResponse, ok := method.Response()[0]; ok { //success response always associated with zero exit code
+			response.Header().Set(headerContentType, successResponse.MimeType)
+			var receiver cmdexec.ExecutionResultRecorder
+			//select buffer for output according with response type
+			switch successResponse.Body.(type) {
+			case FileParameter: //for file response result should be saved into temporary file, not in memory
+				if tempFile, err := cmdexec.NewTempFileRecorder(true); err == nil {
+					receiver = tempFile
+				} else {
+					convertToHttpError(err, response)
+					return
+				}
+			default: //for non-file response, content can be saved into in-memory buffer
+				receiver = cmdexec.NewTextRecorder()
+			}
+			self.deferClose(receiver) //ensure that response buffer will be closed
+			//now execute command
+			if err := method.Executor()(self.args, receiver); err == nil {
+				//extract content length from execution result
+				response.Header().Set(headerContentLength, strconv.Itoa(receiver.Len()))
+				response.WriteHeader(successResponse.StatusCode)
+				//copy buffer into HTTP response
+				if _, err := receiver.WriteTo(response); err != nil {
+					convertToHttpError(err, response)
+				}
+			} else {
+				switch err := err.(type) {
+				case *cmdexec.ExecutionError:
+					if resp, exists := method.Response()[err.ProcessExitCode]; exists {
+						response.Header().Set(headerContentType, resp.MimeType)
+						http.Error(response, err.Error(), resp.StatusCode)
+					} else {
+						http.Error(response, err.Error(), http.StatusInternalServerError)
+					}
+				default:
+					convertToHttpError(err, response)
+				}
+			}
+		} else {
+			http.Error(response, "There is no status code associated with process exit code 0", http.StatusInternalServerError)
+		}
+	}
+}
+
 //creates HTTP handler for the specified endpoint
 func CreateEndpointHandler(endpoint Endpoint) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		executionArguments := cmdexec.NewArguments()
-		//parse path arguments
-		if err := endpoint.PathParameters().parseArguments(request, executionArguments, mux.Vars); err != nil {
-			http.Error(response, fmt.Sprintf("Incorrect path arguments. Error: %s", err.Error()), http.StatusBadRequest)
-		}
-		method := endpoint.GetMethodDescriptor(request.Method)
-		if method == nil {
-			http.Error(response, fmt.Sprintf("Method %s is not supported", request.Method), http.StatusMethodNotAllowed)
-		} else if parseRequest(method, request, response, executionArguments) {//prepare execution arguments
-			//execute command-line tool
-			if successResponse, ok := method.Response()[0]; ok { //success response always associated with zero exit code
-				response.Header().Set(headerContentType, successResponse.MimeType)
-				var receiver cmdexec.ExecutionResultRecorder
-				//select buffer for output according with response type
-				switch successResponse.Body.(type) {
-				case FileParameter: //for file response result should be saved into temporary file, not in memory
-					if tempFile, err := cmdexec.NewTempFileRecorder(true); err == nil {
-						receiver = tempFile
-					} else {
-						convertToHttpError(err, response)
-						return
-					}
-				default: //for non-file response, content can be saved into in-memory buffer
-					receiver = cmdexec.NewTextRecorder()
-				}
-				defer receiver.Close() //ensure that response buffer will be closed
-				//now execute command
-				if err := method.Executor()(executionArguments, receiver); err == nil {
-					//extract content length from execution result
-					response.Header().Set(headerContentLength, strconv.Itoa(receiver.Len()))
-					response.WriteHeader(successResponse.StatusCode)
-					//copy buffer into HTTP response
-					if _, err := receiver.WriteTo(response); err != nil {
-						convertToHttpError(err, response)
-					}
-				} else {
-					switch err := err.(type) {
-					case *cmdexec.ExecutionError:
-						if resp, exists := method.Response()[err.ProcessExitCode]; exists {
-							response.Header().Set(headerContentType, resp.MimeType)
-							http.Error(response, err.Error(), resp.StatusCode)
-						} else {
-							http.Error(response, err.Error(), http.StatusInternalServerError)
-						}
-					default:
-						convertToHttpError(err, response)
-					}
-				}
-			} else {
-				http.Error(response, "There is no status code associated with process exit code 0", http.StatusInternalServerError)
+		//initialize logical operation context
+		ctx := &requestContext{
+			deferredActions: make([]core.DeferredAction, 0, 3),
+			Request: request,
+			args: cmdexec.NewArguments(),
 			}
-		}
+		defer ctx.finalize()	//ensure that context will be closed
+		ctx.handleRequest(endpoint, response)
 	}
 }
 
