@@ -42,6 +42,7 @@ func NewCommandExecutor(render CommandRenderer) CommandExecutor{
 	}
 	return func(args Arguments, output io.Writer) error {
 		if cmd, err := render(args); err == nil {
+			log.Printf("Running command %v", cmd.Args)
 			cmd.Stdout = output
 			if err := cmd.Run(); err == nil{
 				return nil

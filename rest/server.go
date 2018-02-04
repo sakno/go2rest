@@ -120,7 +120,7 @@ func (self *requestContext) parseRequestBody(bodyDefinition ParameterList, reque
 	if body, exists := bodyDefinition[requestType]; exists { //body for this MIME type is specified
 		if body, err := body.ReadValue(self.Body, GetFormatByMIME(requestType)); err == nil {
 			switch body := body.(type) {
-			case os.File:
+			case *os.File:
 				//for file we need to return file name only.
 				defer body.Close()
 				fileName := body.Name()
