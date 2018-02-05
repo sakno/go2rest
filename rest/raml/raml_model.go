@@ -50,7 +50,7 @@ const (
 	fBody 	   = "body"
 	fResponses = "responses"
 	fExitCode  = "(exitCode)"
-	fCommandPattern = "(command-pattern)"
+	fCommandPattern = "(commandPattern)"
 )
 
 func mapSliceToMap(tree yaml.MapSlice) map[string]interface{} {

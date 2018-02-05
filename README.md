@@ -16,7 +16,7 @@
 1. Grab compiled executable from your current directory
 
 # How to use
-1. Describe REST API in the form of RAML file with `.raml` extension. Read [Wiki](https://github.com/sakno/go2rest/wiki) for detailed guide of how to write correct RAML file
+1. Describe REST API in the form of RAML file with `.raml` extension. Read [Wiki](https://github.com/sakno/go2rest/wiki) for detailed guide of how to write correct RAML file; or look at [RAML file](https://github.com/sakno/go2rest/blob/master/rest/raml/test-raml-model.raml) used for tests.
 1. Run `go2rest [--port <port>] <path/to/file.raml>`. Now REST service is hosted on specified port
 1. Generate documentation for your service using [raml2html](https://github.com/raml2html/raml2html) tool: `raml2html path/to/file.raml > service-doc.html`
 
