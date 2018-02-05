@@ -4,7 +4,7 @@ version: v3
 baseUri: http://api.github.com:3535/
 annotationTypes:
   exitCode: integer
-  command-pattern: string
+  commandPattern: string
 /freemem/{format}:
   uriParameters:
     format:
@@ -34,10 +34,14 @@ annotationTypes:
       items:
         type: integer
   get:
-    (command-pattern): free {format}
+    (commandPattern): free {{.format}}
     headers:
       X-Dept:
         type: integer
+        required: false
+    queryParameters:
+      search:
+        type: string
         required: false
     body:
       application/octet-stream:
