@@ -4,14 +4,14 @@ version: v3
 baseUri: https://api.github.com
 annotationTypes:
   exitCode: integer
-  command-pattern: string
+  commandPattern: string
 /echo1/{message}:
   uriParameters:
     message:
       type: string
       required: true
   get:
-    (command-pattern): echo {{.message}}
+    (commandPattern): echo {{.message}}
     responses:
       200:
         (exitCode): 0
